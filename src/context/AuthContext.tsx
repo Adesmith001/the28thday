@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             createdAt: userData.createdAt?.toDate() || new Date(),
             profile: userData.profile,
           });
+          setLoading(false);
         } else {
           // New user - create their profile
           const newUser: User = {
@@ -61,15 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
 
           setUser(newUser);
-          
-          // Redirect new users to onboarding
-          router.push('/onboarding');
+          setLoading(false);
         }
       } else {
         // User is signed out
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();

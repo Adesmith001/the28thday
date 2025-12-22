@@ -13,9 +13,9 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Redirect to dashboard if already authenticated
+    // After authentication, always go to onboarding (per product flow)
     if (!loading && user) {
-      router.push('/dashboard');
+      router.replace('/onboarding');
     }
   }, [user, loading, router]);
 
@@ -25,7 +25,8 @@ export default function LoginPage() {
     
     try {
       await signInWithGoogle();
-      // Router will handle redirect after successful sign-in
+      // onAuthStateChanged will handle the rest and update user state
+      // Don't reset isSigningIn here - let the redirect happen
     } catch (err) {
       console.error('Sign-in error:', err);
       setError('Failed to sign in with Google. Please try again.');
@@ -33,10 +34,15 @@ export default function LoginPage() {
     }
   };
 
-  if (loading) {
+  if (loading || (user && isSigningIn)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">
+            {user ? 'Redirecting...' : 'Loading...'}
+          </p>
+        </div>
       </div>
     );
   }
