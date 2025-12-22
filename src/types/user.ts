@@ -5,6 +5,7 @@ export interface User {
   photoURL?: string;
   createdAt: Date;
   profile?: UserProfile;
+  onboardingCompleted?: boolean;
 }
 
 export interface UserProfile {

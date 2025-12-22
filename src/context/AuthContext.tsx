@@ -1,13 +1,16 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User as FirebaseUser,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  updateProfile,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
@@ -17,6 +20,9 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -27,44 +33,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const ensureUserDoc = async (firebaseUser: FirebaseUser) => {
+    const userRef = doc(db, 'users', firebaseUser.uid);
+    const userDoc = await getDoc(userRef);
+
+    if (!userDoc.exists()) {
+      await setDoc(userRef, {
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    return { userRef, userDoc };
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in, get their profile from Firestore
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        
-        if (userDoc.exists()) {
-          // Existing user
-          const userData = userDoc.data();
-          setUser({
-            id: firebaseUser.uid,
-            email: firebaseUser.email!,
-            displayName: firebaseUser.displayName || undefined,
-            photoURL: firebaseUser.photoURL || undefined,
-            createdAt: userData.createdAt?.toDate() || new Date(),
-            profile: userData.profile,
-          });
-          setLoading(false);
-        } else {
-          // New user - create their profile
-          const newUser: User = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email!,
-            displayName: firebaseUser.displayName || undefined,
-            photoURL: firebaseUser.photoURL || undefined,
-            createdAt: new Date(),
-          };
+        // User is signed in, ensure their base doc exists and fetch profile
+        const { userDoc } = await ensureUserDoc(firebaseUser);
+        const userData = userDoc.exists() ? userDoc.data() : undefined;
 
-          await setDoc(doc(db, 'users', firebaseUser.uid), {
-            email: newUser.email,
-            displayName: newUser.displayName,
-            photoURL: newUser.photoURL,
-            createdAt: serverTimestamp(),
-          });
-
-          setUser(newUser);
-          setLoading(false);
-        }
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email!,
+          displayName: firebaseUser.displayName || undefined,
+          photoURL: firebaseUser.photoURL || undefined,
+          createdAt: userData?.createdAt?.toDate() || new Date(),
+          profile: userData?.profile,
+          onboardingCompleted: userData?.onboardingCompleted,
+        });
+        setLoading(false);
       } else {
         // User is signed out
         setUser(null);
@@ -85,6 +86,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle the rest
+    } catch (error) {
+      console.error('Error signing in with email:', error);
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      if (displayName) {
+        await updateProfile(credential.user, { displayName });
+      }
+
+      await ensureUserDoc(credential.user);
+      // onAuthStateChanged will handle the rest
+    } catch (error) {
+      console.error('Error signing up with email:', error);
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -97,7 +132,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

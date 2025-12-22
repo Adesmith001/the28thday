@@ -12,6 +12,13 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     if (!loading && !user) {
       router.push('/login');
     }
+
+    if (!loading && user) {
+      const isOnboarded = Boolean(user.profile) || Boolean(user.onboardingCompleted);
+      if (!isOnboarded) {
+        router.replace('/onboarding');
+      }
+    }
   }, [user, loading, router]);
 
   if (loading) {
@@ -26,6 +33,10 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   if (!user) {
+    return null;
+  }
+
+  if (!user.profile && !user.onboardingCompleted) {
     return null;
   }
 

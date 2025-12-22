@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useForm } from 'react-hook-form';
@@ -45,10 +45,23 @@ const onboardingSchema = z.object({
 type OnboardingFormData = z.infer<typeof onboardingSchema>;
 
 export default function OnboardingPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+
+    const isOnboarded = Boolean(user.profile) || Boolean(user.onboardingCompleted);
+    if (isOnboarded) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   const {
     register,

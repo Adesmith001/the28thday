@@ -1,27 +1,51 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { EyeIcon, EyeOffIcon, MailIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 export default function LoginPage() {
-  const { user, loading, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithEmail, resetPassword } = useAuth();
   const router = useRouter();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // After authentication, always go to onboarding (per product flow)
     if (!loading && user) {
-      router.replace('/onboarding');
+      const isOnboarded = Boolean(user.profile) || Boolean(user.onboardingCompleted);
+      router.replace(isOnboarded ? '/dashboard' : '/onboarding');
     }
   }, [user, loading, router]);
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSigningIn(true);
+    setError('');
+    setNotice('');
+
+    try {
+      await signInWithEmail(email.trim(), password);
+    } catch (err) {
+      console.error('Sign-in error:', err);
+      setError('Failed to sign in. Please check your details and try again.');
+      setIsSigningIn(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
     setError('');
+    setNotice('');
     
     try {
       await signInWithGoogle();
@@ -31,6 +55,25 @@ export default function LoginPage() {
       console.error('Sign-in error:', err);
       setError('Failed to sign in with Google. Please try again.');
       setIsSigningIn(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      setError('Enter your email first, then tap “Forgot Password?”.');
+      return;
+    }
+
+    setError('');
+    setNotice('');
+
+    try {
+      await resetPassword(targetEmail);
+      setNotice('Password reset email sent. Check your inbox.');
+    } catch (err) {
+      console.error('Reset password error:', err);
+      setError('Could not send reset email. Please try again.');
     }
   };
 
@@ -48,33 +91,110 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 p-4">
+      <Card className="w-full max-w-md rounded-3xl border bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto mb-4">
-            <h1 className="text-4xl font-bold text-purple-600 dark:text-purple-400">
-              The 28th Day
-            </h1>
+          <div className="mx-auto mt-2 mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-green-500 shadow-sm">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 3c-3.6 2.1-6 5.4-6 9.3C6 16.4 8.7 20 12 21c3.3-1 6-4.6 6-8.7C18 8.4 15.6 5.1 12 3Z"
+                fill="white"
+                opacity="0.95"
+              />
+              <path
+                d="M7.5 13.2c2.1-.6 3.8-.3 4.8.8 1-1.1 2.7-1.4 4.8-.8-.4 2.8-2.4 5.2-4.8 5.9-2.4-.7-4.4-3.1-4.8-5.9Z"
+                fill="white"
+              />
+            </svg>
           </div>
-          <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-4xl font-bold">The 28th Day</CardTitle>
+          <CardDescription className="text-base">Welcome Back</CardDescription>
+          <p className="text-sm text-muted-foreground">
             Sign in to continue managing your PCOS health journey
-          </CardDescription>
+          </p>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {error && (
-            <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-md text-center">
+            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-md text-center">
               {error}
             </div>
           )}
-          
+          {notice && (
+            <div className="p-3 text-sm text-green-700 bg-green-50 dark:bg-green-900/20 rounded-md text-center">
+              {notice}
+            </div>
+          )}
+
+          <form onSubmit={handleEmailSignIn} className="space-y-3">
+            <div className="relative">
+              <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                type="email"
+                placeholder="hello@the28thday.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12 rounded-full pl-12"
+                required
+                disabled={isSigningIn}
+              />
+            </div>
+
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-12 rounded-full pr-12"
+                required
+                disabled={isSigningIn}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                disabled={isSigningIn}
+              >
+                {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-sm text-muted-foreground hover:underline"
+                disabled={isSigningIn}
+              >
+                Forgot Password?
+              </button>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isSigningIn}
+              className="w-full h-12 rounded-full bg-green-500 hover:bg-green-600 text-white"
+            >
+              {isSigningIn ? 'Signing in...' : 'Log In'}
+            </Button>
+          </form>
+
+          <div className="flex items-center gap-3 pt-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">OR CONTINUE WITH</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
           <Button
+            type="button"
+            variant="outline"
             onClick={handleGoogleSignIn}
             disabled={isSigningIn}
-            className="w-full"
-            size="lg"
+            className="w-full h-12 rounded-full"
           >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 fill="currentColor"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -92,11 +212,18 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
+            Continue with Google
           </Button>
 
-          <p className="text-xs text-center text-gray-600 dark:text-gray-400 pt-4">
+          <p className="text-xs text-center text-muted-foreground pt-2">
             By continuing, you agree to our Terms of Service and Privacy Policy
+          </p>
+
+          <p className="text-sm text-center text-muted-foreground pt-2">
+            Don&apos;t have an account?{' '}
+            <Link href="/register" className="text-green-600 hover:underline font-medium">
+              Sign Up
+            </Link>
           </p>
         </CardContent>
       </Card>
