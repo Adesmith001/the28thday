@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "the-28th-day",
+    "28day": "the-28th-day"
+  },
+  "targets": {},
+  "etags": {}
+}
