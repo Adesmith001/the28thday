@@ -5,10 +5,9 @@ import { usePathname } from 'next/navigation';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-  { name: 'Cycle Tracker', href: '/cycle-tracker', icon: '📅' },
-  { name: 'Symptoms', href: '/symptoms', icon: '💊' },
   { name: 'Nutrition', href: '/nutrition', icon: '🍽️' },
   { name: 'Insights', href: '/insights', icon: '💡' },
+  { name: 'Profile', href: '/profile', icon: '👤' },
 ];
 
 export default function Sidebar() {

@@ -22,6 +22,11 @@ service cloud.firestore {
     function canReadResource() {
       return isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
+
+    // Fallback for legacy docs that use an id prefix of `${uid}_...`
+    function idHasUidPrefix(docId) {
+      return isAuthenticated() && docId.matches('^' + request.auth.uid + '_.*$');
+    }
     
     // Users collection - users can only read/write their own profile
     match /users/{userId} {
@@ -66,18 +71,16 @@ service cloud.firestore {
     
     // Daily activities collection - users can only access their own daily activities
     match /dailyActivities/{activityId} {
-      allow read: if canReadResource();
+      allow read: if canReadResource() || idHasUidPrefix(activityId);
       allow create: if hasValidUserId();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || idHasUidPrefix(activityId));
     }
     
     // Streaks collection - users can only access their own streaks
     match /streaks/{streakId} {
-      allow read: if canReadResource();
+      allow read: if canReadResource() || idHasUidPrefix(streakId);
       allow create: if hasValidUserId();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || idHasUidPrefix(streakId));
     }
     
     // Deny all other access by default

@@ -31,6 +31,7 @@ interface DashboardData {
   cycleDay: number;
   gutHealth: string;
   gutHealthStatus: string;
+  dailyTip: string;
 }
 
 export default function DashboardPage() {
@@ -46,6 +47,7 @@ export default function DashboardPage() {
     cycleDay: 1,
     gutHealth: 'normal',
     gutHealthStatus: 'stable',
+    dailyTip: 'Loading your personalized tip...',
   });
 
   const [showWaterModal, setShowWaterModal] = useState(false);
@@ -84,9 +86,8 @@ export default function DashboardPage() {
           phase = phaseStr.charAt(0).toUpperCase() + phaseStr.slice(1);
         }
       }
-
       // Use aggregated data from fetched results
-      setData({
+      const dashboardData = {
         waterIntake: waterData.total || 0,
         exercises: exercisesData.exercises || [],
         activeMinutes: exercisesData.totalMinutes || 0,
@@ -96,7 +97,34 @@ export default function DashboardPage() {
         cycleDay: day,
         gutHealth: dailyData?.gutHealth || 'normal',
         gutHealthStatus: dailyData?.gutHealthStatus || 'stable',
-      });
+        dailyTip: 'Loading your personalized tip...',
+      };
+
+      setData(dashboardData);
+
+      // Fetch AI-generated daily tip
+      try {
+        const tipResponse = await fetch('/api/daily-tip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cyclePhase: phase,
+            gutHealth: dailyData?.gutHealth || 'normal',
+            cycleDay: day,
+          }),
+        });
+
+        if (tipResponse.ok) {
+          const { tip } = await tipResponse.json();
+          setData(prev => ({ ...prev, dailyTip: tip }));
+        }
+      } catch (error) {
+        console.error('Error fetching daily tip:', error);
+        setData(prev => ({ 
+          ...prev, 
+          dailyTip: 'Stay hydrated and prioritize rest during your cycle. Your body knows what it needs!' 
+        }));
+      }
       
       console.log('Dashboard data loaded:', {
         water: waterData.total,
@@ -211,10 +239,6 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-600 uppercase tracking-wide">Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}</p>
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900">{user?.displayName || 'There'}</h1>
           </div>
-          <button className="relative w-12 h-12 rounded-full bg-white/80 backdrop-blur-md shadow-lg flex items-center justify-center">
-            <span className="text-2xl">🔔</span>
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
         </div>
 
         {/* Bento Grid */}
@@ -481,7 +505,7 @@ export default function DashboardPage() {
             }}
           >
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-6">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Consistency Streak</p>
                   <p className="text-4xl font-bold text-emerald-600">{data.streak} <span className="text-lg text-gray-500">days</span></p>
@@ -490,29 +514,52 @@ export default function DashboardPage() {
                   <span className="text-3xl">🔥</span>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                {[...Array(Math.min(data.streak, 7))].map((_, i) => (
-                  <div 
-                    key={i}
-                    className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shadow-md"
-                    style={{
-                      boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)',
-                    }}
-                  >
-                    <span className="text-white text-sm font-bold">✓</span>
-                  </div>
-                ))}
-                {[...Array(Math.max(7 - data.streak, 0))].map((_, i) => (
-                  <div 
-                    key={`empty-${i}`}
-                    className="w-10 h-10 rounded-full bg-gray-200"
-                  />
-                ))}
+              
+              {/* Week Progress */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                  <span>This Week</span>
+                  <span>{Math.min(data.streak, 7)}/7 days</span>
+                </div>
+                
+                <div className="grid grid-cols-7 gap-2">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
+                    const isComplete = i < Math.min(data.streak, 7);
+                    return (
+                      <div key={day} className="flex flex-col items-center gap-2">
+                        <div 
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                            isComplete 
+                              ? 'bg-linear-to-br from-emerald-400 to-emerald-600 shadow-lg scale-100' 
+                              : 'bg-gray-100 scale-95'
+                          }`}
+                          style={isComplete ? {
+                            boxShadow: '0 4px 20px rgba(16, 185, 129, 0.4)',
+                          } : {}}
+                        >
+                          {isComplete ? (
+                            <span className="text-white text-lg font-bold">✓</span>
+                          ) : (
+                            <span className="text-gray-400 text-lg">○</span>
+                          )}
+                        </div>
+                        <span className={`text-xs font-medium ${isComplete ? 'text-emerald-600' : 'text-gray-400'}`}>
+                          {day}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-4">Keep it up! Track your activities daily to maintain your streak.</p>
+              
+              <p className="text-xs text-gray-500 mt-5 text-center">
+                {data.streak === 0 && "Start your streak today! Track any activity to begin."}
+                {data.streak > 0 && data.streak < 7 && `${7 - data.streak} more day${7 - data.streak > 1 ? 's' : ''} to complete this week!`}
+                {data.streak >= 7 && "Amazing! You've completed a full week! 🎉"}
+              </p>
             </CardContent>
           </Card>
-
+  
           {/* Daily Tip */}
           <Card 
             className="md:col-span-2 lg:col-span-1 border-0 shadow-lg"
@@ -527,13 +574,13 @@ export default function DashboardPage() {
                 <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
                   <span className="text-xl">💡</span>
                 </div>
-                <p className="text-sm font-semibold text-gray-700">Daily Tip</p>
+                <p className="text-sm font-semibold text-gray-700">Daily Tip for {data.cyclePhase} Phase</p>
               </div>
-              <p className="text-gray-900 font-medium">
-                Try peppermint tea for evening bloating.
+              <p className="text-gray-900 font-medium leading-relaxed">
+                {data.dailyTip}
               </p>
-              <p className="text-xs text-gray-600 mt-2">
-                Natural remedies can support your gut health during different cycle phases.
+              <p className="text-xs text-gray-600 mt-3">
+                AI-powered wellness tips tailored to your cycle and health
               </p>
             </CardContent>
           </Card>

@@ -1,14 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard' },
-  { name: 'Cycle Tracker', href: '/cycle-tracker' },
-  { name: 'Symptoms', href: '/symptoms' },
   { name: 'Nutrition', href: '/nutrition' },
   { name: 'Insights', href: '/insights' },
 ];
@@ -55,9 +54,11 @@ export default function Header() {
             {user && (
               <div className="flex items-center gap-3">
                 {user.photoURL && (
-                  <img 
+                  <Image 
                     src={user.photoURL} 
                     alt={user.displayName || 'User'} 
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full"
                   />
                 )}

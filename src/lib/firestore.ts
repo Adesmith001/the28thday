@@ -14,6 +14,16 @@ import { db } from './firebase';
 import { CycleEntry, SymptomLog, MealLog } from '@/types';
 import { WaterIntake, Exercise, DailyActivity } from '@/types/activity';
 
+// Helper to remove undefined fields from objects before Firestore writes
+const removeUndefined = <T extends Record<string, unknown>>(obj: T): Partial<T> => {
+  return Object.entries(obj).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      acc[key as keyof T] = value as T[keyof T];
+    }
+    return acc;
+  }, {} as Partial<T>);
+};
+
 // Collections
 const USERS_COLLECTION = 'users';
 const CYCLES_COLLECTION = 'cycles';
@@ -246,6 +256,8 @@ export const updateDailyActivity = async (userId: string, updates: Partial<Daily
     const current = activitySnap.data();
     await setDoc(activityRef, {
       ...current,
+      userId,
+      date: today,
       waterIntake: updates.waterIntake 
         ? (current.waterIntake || 0) + updates.waterIntake 
         : current.waterIntake,
@@ -255,25 +267,25 @@ export const updateDailyActivity = async (userId: string, updates: Partial<Daily
       totalCalories: updates.totalCalories 
         ? (current.totalCalories || 0) + updates.totalCalories 
         : current.totalCalories,
-      gutHealth: updates.gutHealth || current.gutHealth,
-      gutHealthStatus: updates.gutHealthStatus || current.gutHealthStatus,
-      moodScore: updates.moodScore || current.moodScore,
+      gutHealth: updates.gutHealth !== undefined ? updates.gutHealth : current.gutHealth,
+      gutHealthStatus: updates.gutHealthStatus !== undefined ? updates.gutHealthStatus : current.gutHealthStatus,
+      moodScore: updates.moodScore !== undefined ? updates.moodScore : current.moodScore,
       updatedAt: Timestamp.now(),
     }, { merge: true });
   } else {
-    await setDoc(activityRef, {
+    await setDoc(activityRef, removeUndefined({
       userId,
       date: today,
       waterIntake: updates.waterIntake || 0,
       exercises: [],
       totalActiveMinutes: updates.totalActiveMinutes || 0,
       totalCalories: updates.totalCalories || 0,
-      gutHealth: updates.gutHealth,
-      gutHealthStatus: updates.gutHealthStatus,
+      gutHealth: updates.gutHealth || 'normal',
+      gutHealthStatus: updates.gutHealthStatus || 'stable',
       moodScore: updates.moodScore,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-    });
+    }));
   }
   
   // Update streak

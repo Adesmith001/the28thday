@@ -50,13 +50,13 @@ export default function FloatingNavBar() {
 
   return (
     <nav 
-      className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 lg:hidden"
+      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 lg:hidden"
       style={{
         filter: 'drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15)) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.1))',
       }}
     >
       <div 
-        className="relative rounded-full px-6 py-3 backdrop-blur-[30px]"
+        className="relative rounded-full px-10 py-4 backdrop-blur-[30px]"
         style={{
           background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0.9) 100%)',
           boxShadow: 'inset 0 0 0 0.5px rgba(255, 255, 255, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.5)',
