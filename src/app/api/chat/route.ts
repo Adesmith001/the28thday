@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { getUserProfile } from '@/lib/firestore';
 
-// Single place to validate the API key so we can give a clear error
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Use Groq instead of Gemini (faster, more reliable free tier)
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const buildGenAIClient = () => {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not set');
+const buildGroqClient = () => {
+  if (!GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not set. Get one free at https://console.groq.com');
   }
-  return new GoogleGenerativeAI(GEMINI_API_KEY);
+  return new Groq({ apiKey: GROQ_API_KEY });
 };
 
 export async function POST(request: NextRequest) {
@@ -107,33 +107,28 @@ ${userContext}
 - End with encouragement
 `;
 
-    const genAI = buildGenAIClient();
-    const model = genAI.getGenerativeModel({ 
-      // Use a widely available model; adjust here if your key lacks access
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        temperature: 0.9,
-        topP: 0.95,
-        maxOutputTokens: 500,
-      },
-    });
-
-    const chat = model.startChat({
-      history: [
+    const groq = buildGroqClient();
+    
+    // Use Groq's llama model (fast and reliable)
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
         {
           role: 'user',
-          parts: [{ text: systemPrompt }],
-        },
-        {
-          role: 'model',
-          parts: [{ text: "I understand my role as Sisi. I'm ready to support her with warmth, cultural awareness, and practical advice. Let's help her thrive! 💚" }],
+          content: message,
         },
       ],
+      temperature: 0.9,
+      max_tokens: 500,
+      top_p: 0.95,
     });
 
-    const result = await chat.sendMessage(message);
-    const response = result.response;
-    const aiMessage = response.text();
+    const aiMessage = completion.choices[0]?.message?.content || 
+      "Sorry dear, I couldn't process that. Please try again. 💚";
 
     return NextResponse.json({ message: aiMessage });
   } catch (error: unknown) {
@@ -141,15 +136,15 @@ ${userContext}
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Surface missing key clearly to the client for easier debugging
-    const isMissingKey = errorMessage.includes('GEMINI_API_KEY');
+    const isMissingKey = errorMessage.includes('GROQ_API_KEY');
     const status = isMissingKey ? 500 : 500;
     const friendly = isMissingKey
-      ? 'AI is not configured. Please set GEMINI_API_KEY in your environment.'
+      ? 'AI is not configured. Get a free API key at https://console.groq.com and add GROQ_API_KEY to .env'
       : 'Failed to process chat message';
 
-    return NextResponse.json(
-      { error: friendly, details: errorMessage },
-      { status }
-    );
+      return NextResponse.json(
+        { error: friendly, details: errorMessage },
+        { status }
+      );
+    }
   }
-}

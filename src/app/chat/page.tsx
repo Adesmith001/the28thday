@@ -61,7 +61,10 @@ export default function ChatPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        // Parse error details from the API response
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('API returned error:', errorData);
+        throw new Error(errorData.error || 'Failed to get response');
       }
 
       const data = await response.json();
@@ -75,9 +78,16 @@ export default function ChatPage() {
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      // Show more specific error message if available
+      const errorText = error instanceof Error ? error.message : 'Unknown error';
+      const isConfigError = errorText.includes('GEMINI_API_KEY') || errorText.includes('not configured');
+      
       const errorMessage: Message = {
         role: 'ai',
-        content: "Sorry dear, I'm having trouble connecting right now. Please try again in a moment. 💚",
+        content: isConfigError 
+          ? "Sorry dear, I need to be configured first. Please check that GEMINI_API_KEY is set in the environment. 🔧"
+          : "Sorry dear, I'm having trouble connecting right now. Please try again in a moment. 💚",
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -104,7 +114,7 @@ export default function ChatPage() {
 
   return (
     <div 
-      className="min-h-screen flex flex-col"
+      className="h-screen flex flex-col"
       style={{
         background: 'linear-gradient(135deg, #f0f4f0 0%, #e8dff5 50%, #fff9f0 100%)',
       }}
@@ -224,7 +234,7 @@ export default function ChatPage() {
 
       {/* Input Area */}
       <div 
-        className="fixed bottom-20 lg:bottom-4 left-0 right-0 px-4 py-4 backdrop-blur-md"
+        className="fixed bottom-0 lg:bottom-4 left-0 right-0 px-4 py-4 backdrop-blur-md"
         style={{
           background: 'rgba(255, 255, 255, 0.8)',
           boxShadow: '0 -1px 3px rgba(0, 0, 0, 0.1)',

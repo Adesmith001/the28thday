@@ -13,6 +13,7 @@ export default function FoodSnapPage() {
   const router = useRouter();
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [foodDescription, setFoodDescription] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -53,6 +54,7 @@ export default function FoodSnapPage() {
     }
     setIsCameraOpen(false);
     setCapturedImage(null);
+    setFoodDescription('');
     setAnalysis(null);
   };
 
@@ -90,9 +92,8 @@ export default function FoodSnapPage() {
       reader.readAsDataURL(file);
     }
   };
-
   const analyzeFood = async () => {
-    if (!capturedImage || !user) return;
+    if (!capturedImage || !user || !foodDescription.trim()) return;
 
     setAnalyzing(true);
     try {
@@ -104,21 +105,22 @@ export default function FoodSnapPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          image: capturedImage,
+          foodDescription: foodDescription.trim(),
           userId: user.id,
           userProfile: profile 
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Analysis failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Analysis failed');
       }
 
       const data = await response.json();
       setAnalysis(data);
     } catch (error) {
       console.error('Error analyzing food:', error);
-      alert('Failed to analyze food. Please try again.');
+      alert('Failed to analyze food. Please try again or use the chat: "Can I eat [food name]?"');
     } finally {
       setAnalyzing(false);
     }
@@ -267,23 +269,37 @@ export default function FoodSnapPage() {
               />
               
               {!analysis && (
-                <Button
-                  onClick={analyzeFood}
-                  disabled={analyzing}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-full py-6 text-lg"
-                >
-                  {analyzing ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Analyzing with AI...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5 mr-2" />
-                      Analyze with AI
-                    </>
-                  )}
-                </Button>
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Describe your food
+                    </label>
+                    <input
+                      type="text"
+                      value={foodDescription}
+                      onChange={(e) => setFoodDescription(e.target.value)}
+                      placeholder="e.g., Jollof Rice with chicken, Suya and plantain..."
+                      className="w-full px-4 py-3 rounded-full border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+                    />
+                  </div>
+                  <Button
+                    onClick={analyzeFood}
+                    disabled={analyzing || !foodDescription.trim()}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-full py-6 text-lg disabled:opacity-50"
+                  >
+                    {analyzing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Analyzing with AI...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5 mr-2" />
+                        Analyze with AI
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
 
               {/* Analysis Results */}

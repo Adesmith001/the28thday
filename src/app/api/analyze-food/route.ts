@@ -1,19 +1,26 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+const buildGroqClient = () => {
+  if (!GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not set. Get one free at https://console.groq.com');
+  }
+  return new Groq({ apiKey: GROQ_API_KEY });
+};
 
 export async function POST(request: NextRequest) {
   try {
-    const { image, userId, userProfile } = await request.json();
+    const { foodDescription, userId, userProfile } = await request.json();
 
-    if (!image) {
-      return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+    if (!foodDescription) {
+      return NextResponse.json({ 
+        error: 'Please describe the food',
+        suggestion: 'Use the chat to ask: "Can I eat [food name]?"'
+      }, { status: 400 });
     }
-
-    // Remove data URL prefix
-    const base64Image = image.replace(/^data:image\/\w+;base64,/, '');
 
     // Build context from user profile
     let contextPrompt = '';
@@ -27,13 +34,13 @@ export async function POST(request: NextRequest) {
 `;
     }
 
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-pro-latest',
-    });
+    const groq = buildGroqClient();
 
     const prompt = `${contextPrompt}
 
-You are analyzing a food image for a Nigerian woman with specific health needs.
+You are analyzing food for a Nigerian woman with specific health needs.
+
+**FOOD:** ${foodDescription}
 
 **TASK:**
 1. Identify the food item (use Nigerian food names if applicable: Jollof Rice, Amala, Suya, Eba, etc.)
@@ -46,7 +53,7 @@ You are analyzing a food image for a Nigerian woman with specific health needs.
 4. **PCOS ADVICE:** If user has PCOS, comment on glycemic index and insulin impact
 5. Give a brief recommendation (1-2 sentences)
 
-**OUTPUT FORMAT (JSON):**
+**OUTPUT FORMAT (JSON only, no markdown):**
 {
   "foodName": "Name of the dish",
   "calories": number,
@@ -62,34 +69,36 @@ You are analyzing a food image for a Nigerian woman with specific health needs.
 - Be accurate with Nigerian dishes
 - If you're uncertain, estimate conservatively
 - For ulcers, be STRICT about triggers
-- Keep recommendations supportive and brief`;
+- Keep recommendations supportive and brief
+- Return ONLY valid JSON, no markdown code blocks`;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: base64Image,
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
         },
-      },
-    ]);
+      ],
+      temperature: 0.3,
+      max_tokens: 800,
+    });
 
-    const response = result.response;
-    const text = response.text();
+    const text = completion.choices[0]?.message?.content || '';
 
     // Try to extract JSON from response
     let analysis;
     try {
+      // Remove markdown code blocks if present
+      const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '');
       // Find JSON in response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         analysis = JSON.parse(jsonMatch[0]);
       } else {
-        // Fallback: try to parse the entire response
-        analysis = JSON.parse(text);
+        analysis = JSON.parse(cleanText);
       }
     } catch (parseError) {
-      // If parsing fails, create a structured response from the text
       console.log('Could not parse JSON, using text response:', text);
       analysis = {
         foodName: 'Food Item',
@@ -106,8 +115,9 @@ You are analyzing a food image for a Nigerian woman with specific health needs.
     return NextResponse.json(analysis);
   } catch (error) {
     console.error('Error analyzing food:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to analyze food image' },
+      { error: 'Failed to analyze food', details: errorMessage },
       { status: 500 }
     );
   }
