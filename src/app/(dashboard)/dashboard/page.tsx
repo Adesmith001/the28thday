@@ -12,13 +12,16 @@ import {
   saveExercise,
   updateDailyActivity,
   getCycleEntries,
+  getUserProfile,
 } from '@/lib/firestore';
 import { getCurrentPhase } from '@/lib/cycleUtils';
 import type { Exercise, DailyActivity } from '@/types/activity';
 import AddWaterModal from '@/components/dashboard/AddWaterModal';
 import AddExerciseModal from '@/components/dashboard/AddExerciseModal';
 import UpdateGutHealthModal from '@/components/dashboard/UpdateGutHealthModal';
-import { Plus, Droplet, Dumbbell, Camera, MessageCircle, TrendingUp } from 'lucide-react';
+import AddMoodModal from '@/components/dashboard/AddMoodModal';
+import AddSleepModal from '@/components/dashboard/AddSleepModal';
+import { Plus, Droplet, Dumbbell, Camera, MessageCircle, TrendingUp, Brain, Moon } from 'lucide-react';
 import Link from 'next/link';
 
 interface DashboardData {
@@ -32,6 +35,9 @@ interface DashboardData {
   gutHealth: string;
   gutHealthStatus: string;
   dailyTip: string;
+  moodScore?: string;
+  sleepHours?: number;
+  sleepQuality?: string;
 }
 
 export default function DashboardPage() {
@@ -48,11 +54,16 @@ export default function DashboardPage() {
     gutHealth: 'normal',
     gutHealthStatus: 'stable',
     dailyTip: 'Loading your personalized tip...',
+    moodScore: undefined,
+    sleepHours: undefined,
+    sleepQuality: undefined,
   });
 
   const [showWaterModal, setShowWaterModal] = useState(false);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showGutHealthModal, setShowGutHealthModal] = useState(false);
+  const [showMoodModal, setShowMoodModal] = useState(false);
+  const [showSleepModal, setShowSleepModal] = useState(false);
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -61,12 +72,13 @@ export default function DashboardPage() {
       setLoading(true);
 
       // Load all data in parallel
-      const [waterData, exercisesData, dailyData, streakData, cycleData] = await Promise.all([
+      const [waterData, exercisesData, dailyData, streakData, cycleData, userProfile] = await Promise.all([
         getTodayWaterIntake(user.id),
         getTodayExercises(user.id),
         getDailyActivity(user.id),
         getStreak(user.id, 'overall'),
         getCycleEntries(user.id, 1),
+        getUserProfile(user.id),
       ]);
 
       // Calculate cycle phase
@@ -80,8 +92,37 @@ export default function DashboardPage() {
             ? latestCycle.startDate 
             : (latestCycle.startDate as { toDate: () => Date }).toDate();
           const today = new Date();
-          const diffTime = Math.abs(today.getTime() - startDate.getTime());
-          day = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          today.setHours(0, 0, 0, 0);
+          const startDateCopy = new Date(startDate);
+          startDateCopy.setHours(0, 0, 0, 0);
+          const diffTime = today.getTime() - startDateCopy.getTime();
+          day = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1); // Clamp to at least day 1
+          const phaseStr = getCurrentPhase(day);
+          phase = phaseStr.charAt(0).toUpperCase() + phaseStr.slice(1);
+        }
+      } else if (userProfile?.profile?.lastPeriodStartDate) {
+        // Fallback to user profile if no cycle entries exist
+        const lastPeriod = userProfile.profile.lastPeriodStartDate;
+        const normalizedStart = lastPeriod instanceof Date
+          ? lastPeriod
+          : typeof (lastPeriod as { toDate?: () => Date }).toDate === 'function'
+            ? (lastPeriod as { toDate: () => Date }).toDate()
+            : new Date(lastPeriod as string);
+
+        if (!Number.isNaN(normalizedStart.getTime())) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const startDateCopy = new Date(normalizedStart);
+          startDateCopy.setHours(0, 0, 0, 0);
+          const diffTime = today.getTime() - startDateCopy.getTime();
+          day = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1); // Clamp to at least day 1
+          
+          // Ensure day doesn't exceed cycle length (loop back after full cycle)
+          const cycleLength = userProfile.profile.averageCycleLength || 28;
+          if (day > cycleLength) {
+            day = ((day - 1) % cycleLength) + 1;
+          }
+          
           const phaseStr = getCurrentPhase(day);
           phase = phaseStr.charAt(0).toUpperCase() + phaseStr.slice(1);
         }
@@ -98,6 +139,9 @@ export default function DashboardPage() {
         gutHealth: dailyData?.gutHealth || 'normal',
         gutHealthStatus: dailyData?.gutHealthStatus || 'stable',
         dailyTip: 'Loading your personalized tip...',
+        moodScore: dailyData?.moodScore,
+        sleepHours: dailyData?.sleepHours,
+        sleepQuality: dailyData?.sleepQuality,
       };
 
       setData(dashboardData);
@@ -182,6 +226,32 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error updating gut health:', error);
       alert('Failed to update gut health. Please try again.');
+    }
+  };
+
+  const handleAddMood = async (mood: string) => {
+    if (!user) return;
+    try {
+      console.log('Saving mood:', mood, 'for user:', user.id);
+      await updateDailyActivity(user.id, { moodScore: mood } as Partial<DailyActivity>);
+      console.log('Mood saved successfully');
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error saving mood:', error);
+      alert('Failed to save mood. Please try again.');
+    }
+  };
+
+  const handleAddSleep = async (sleep: { hours: number; quality: string }) => {
+    if (!user) return;
+    try {
+      console.log('Saving sleep:', sleep, 'for user:', user.id);
+      await updateDailyActivity(user.id, { sleepHours: sleep.hours, sleepQuality: sleep.quality } as Partial<DailyActivity>);
+      console.log('Sleep saved successfully');
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error saving sleep:', error);
+      alert('Failed to save sleep data. Please try again.');
     }
   };
 
@@ -495,6 +565,85 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Mood Tracker Card */}
+          <Card 
+            className="border-0 shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
+              backdropFilter: 'blur(30px)',
+              boxShadow: 'inset 0 0 0 0.5px rgba(255, 255, 255, 0.8), 0 10px 30px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center">
+                  <Brain className="w-6 h-6 text-purple-600" />
+                </div>
+                <button
+                  onClick={() => setShowMoodModal(true)}
+                  className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white hover:bg-purple-600 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">Mood</p>
+              {data.moodScore ? (
+                <>
+                  <p className="text-2xl font-bold text-gray-900 capitalize mb-1">
+                    {data.moodScore === 'very-bad' ? '😢 Very Bad' :
+                     data.moodScore === 'bad' ? '😟 Bad' :
+                     data.moodScore === 'neutral' ? '😐 Neutral' :
+                     data.moodScore === 'good' ? '😊 Good' :
+                     '😄 Excellent'}
+                  </p>
+                  <p className="text-xs text-gray-500">Tap to update</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 italic">Not logged yet</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Sleep Tracker Card */}
+          <Card 
+            className="border-0 shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
+              backdropFilter: 'blur(30px)',
+              boxShadow: 'inset 0 0 0 0.5px rgba(255, 255, 255, 0.8), 0 10px 30px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center">
+                  <Moon className="w-6 h-6 text-indigo-600" />
+                </div>
+                <button
+                  onClick={() => setShowSleepModal(true)}
+                  className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white hover:bg-indigo-600 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">Sleep (Last Night)</p>
+              {data.sleepHours ? (
+                <>
+                  <p className="text-4xl font-bold text-gray-900 mb-1">
+                    {data.sleepHours}<span className="text-xl text-gray-500">h</span>
+                  </p>
+                  <p className="text-sm text-gray-600 capitalize">
+                    {data.sleepQuality === 'poor' ? '😫 Poor quality' :
+                     data.sleepQuality === 'fair' ? '😴 Fair quality' :
+                     data.sleepQuality === 'good' ? '😌 Good quality' :
+                     '😊 Excellent quality'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 italic">Not logged yet</p>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Consistency Streak Card */}
           <Card 
             className="md:col-span-2 border-0 shadow-lg"
@@ -604,6 +753,16 @@ export default function DashboardPage() {
         isOpen={showGutHealthModal}
         onClose={() => setShowGutHealthModal(false)}
         onSave={handleUpdateGutHealth}
+      />
+      <AddMoodModal
+        isOpen={showMoodModal}
+        onClose={() => setShowMoodModal(false)}
+        onSave={handleAddMood}
+      />
+      <AddSleepModal
+        isOpen={showSleepModal}
+        onClose={() => setShowSleepModal(false)}
+        onSave={handleAddSleep}
       />
     </div>
   );

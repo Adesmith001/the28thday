@@ -48,6 +48,34 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    const confirmed = window.confirm('Delete your account and all data permanently? This cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      const idToken = await auth.currentUser?.getIdToken(true);
+      if (!idToken) throw new Error('Missing auth token');
+
+      const res = await fetch('/api/user/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, idToken }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Failed to delete account' }));
+        throw new Error(data.error || 'Failed to delete account');
+      }
+
+      await signOut(auth);
+      router.push('/register');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('Could not delete account. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -186,6 +214,16 @@ export default function ProfilePage() {
           >
             <LogOut className="w-5 h-5" />
             Sign Out
+          </button>
+        </Card>
+
+        {/* Delete Account */}
+        <Card className="mt-4">
+          <button
+            onClick={handleDeleteAccount}
+            className="w-full px-4 py-4 flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors rounded-lg font-medium"
+          >
+            Delete Account
           </button>
         </Card>
 

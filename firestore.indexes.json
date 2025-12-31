@@ -39,6 +39,14 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "healthSummaries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

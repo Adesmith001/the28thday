@@ -25,7 +25,9 @@ export interface DailyActivity {
   exercises: string[]; // array of exercise IDs
   totalActiveMinutes: number;
   totalCalories: number;
-  moodScore?: 'poor' | 'fair' | 'good' | 'great' | 'excellent';
+  moodScore?: 'very-bad' | 'bad' | 'neutral' | 'good' | 'excellent';
+  sleepHours?: number; // hours slept previous night
+  sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
   gutHealth?: 'low-bloating' | 'moderate-bloating' | 'high-bloating' | 'normal';
   gutHealthStatus?: 'stable' | 'improving' | 'worsening';
   createdAt: Date;

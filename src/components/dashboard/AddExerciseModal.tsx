@@ -17,6 +17,7 @@ const exerciseTypes = [
   { name: 'Walking', emoji: '🚶‍♀️', defaultCalories: 120 },
   { name: 'Dancing', emoji: '💃', defaultCalories: 250 },
   { name: 'Swimming', emoji: '🏊‍♀️', defaultCalories: 350 },
+  { name: 'Skipping', emoji: '🪢', defaultCalories: 400 },
 ];
 
 const intensityLevels = ['low', 'medium', 'high'];

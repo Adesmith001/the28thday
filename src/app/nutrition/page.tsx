@@ -13,7 +13,6 @@ export default function FoodSnapPage() {
   const router = useRouter();
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [foodDescription, setFoodDescription] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -54,7 +53,6 @@ export default function FoodSnapPage() {
     }
     setIsCameraOpen(false);
     setCapturedImage(null);
-    setFoodDescription('');
     setAnalysis(null);
   };
 
@@ -93,7 +91,7 @@ export default function FoodSnapPage() {
     }
   };
   const analyzeFood = async () => {
-    if (!capturedImage || !user || !foodDescription.trim()) return;
+    if (!capturedImage || !user) return;
 
     setAnalyzing(true);
     try {
@@ -105,7 +103,7 @@ export default function FoodSnapPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          foodDescription: foodDescription.trim(),
+          imageBase64: capturedImage,
           userId: user.id,
           userProfile: profile 
         }),
@@ -269,37 +267,23 @@ export default function FoodSnapPage() {
               />
               
               {!analysis && (
-                <>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Describe your food
-                    </label>
-                    <input
-                      type="text"
-                      value={foodDescription}
-                      onChange={(e) => setFoodDescription(e.target.value)}
-                      placeholder="e.g., Jollof Rice with chicken, Suya and plantain..."
-                      className="w-full px-4 py-3 rounded-full border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
-                    />
-                  </div>
-                  <Button
-                    onClick={analyzeFood}
-                    disabled={analyzing || !foodDescription.trim()}
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-full py-6 text-lg disabled:opacity-50"
-                  >
-                    {analyzing ? (
-                      <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Analyzing with AI...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-5 h-5 mr-2" />
-                        Analyze with AI
-                      </>
-                    )}
-                  </Button>
-                </>
+                <Button
+                  onClick={analyzeFood}
+                  disabled={analyzing}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-full py-6 text-lg disabled:opacity-50"
+                >
+                  {analyzing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Analyzing with AI...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Analyze with AI
+                    </>
+                  )}
+                </Button>
               )}
 
               {/* Analysis Results */}

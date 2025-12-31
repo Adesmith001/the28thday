@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { getUserProfile } from '@/lib/firestore';
+import { getUserProfile, saveChatMessage, getRecentChatContext } from '@/lib/firestore';
 
 // Use Groq instead of Gemini (faster, more reliable free tier)
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -14,7 +14,7 @@ const buildGroqClient = () => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, userId, ventingMode } = await request.json();
+    const { message, userId, ventingMode, sessionId } = await request.json();
 
     if (!message || !userId) {
       return NextResponse.json(
@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.log('Could not fetch user profile, continuing without context:', error);
     }
+
+    // Get deeper chat history for context (30 most recent messages)
+    const recentMessages = await getRecentChatContext(userId, 30);
     
     // Build user context
     let userContext = '';
@@ -48,6 +51,9 @@ export async function POST(request: NextRequest) {
 - Current Medications: ${profile.medications?.join(', ') || 'None'}
 - Allergies: ${profile.allergies?.join(', ') || 'None'}
 - Health Goals: ${profile.healthGoals?.join(', ') || 'Weight management, Symptom reduction'}
+
+**CONVERSATION HISTORY:**
+You have access to previous conversations with this user. Remember context from earlier in the conversation and build on it. Reference past discussions when relevant to show you're paying attention and care about their journey.
 `;
     }
 
@@ -79,8 +85,9 @@ ${userContext}
 2. **Ulcer Awareness:** If she asks about food and has an ulcer, ALWAYS check if it triggers ulcers (spicy, fried, acidic, tomato-based, caffeine, alcohol).
 3. **Nigerian Context:** You understand Nigerian foods (Jollof Rice, Amala, Eba, Suya, Fufu, Pounded Yam, Egusi, Efo Riro, Akara, Moi Moi, Puff Puff, Chapman). You know that "Swallow" is carb-heavy.
 4. **Tone:** Encouraging, warm, but firm on discipline. Use phrases like "My dear", "Don't worry", "Well done", "I'm proud of you".
-5. **Brief Answers:** Keep responses under 4 sentences unless she asks for a detailed plan.
+5. **Brief Answers:** Keep responses under 4 sentences unless she asks for a detailed plan — then be as detailed and actionable as possible.
 6. **Practical Nigerian Solutions:** Suggest foods available in Nigerian markets. Reference local exercise spots (neighbourhood walks, home workouts).
+7. **Be Unblocked & Helpful:** Avoid unnecessary refusals. If asked for plans, give clear, step-by-step, usable advice. If details are missing, make reasonable assumptions and state them.
 
 **SCENARIOS:**
 - **If she wants to binge:** Acknowledge the craving, suggest a healthier Nigerian alternative (e.g., "Instead of that meat pie, how about some roasted plantain with groundnuts?"), remind her of her goals.
@@ -109,28 +116,47 @@ ${userContext}
 
     const groq = buildGroqClient();
     
+    // Build messages array with history
+    const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      {
+        role: 'system',
+        content: systemPrompt,
+      }
+    ];
+
+    // Add recent conversation history
+    if (recentMessages.length > 0) {
+      messages.push(...recentMessages as { role: 'system' | 'user' | 'assistant'; content: string }[]);
+    }
+
+    // Add current message
+    messages.push({
+      role: 'user',
+      content: message,
+    });
+    
     // Use Groq's llama model (fast and reliable)
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: message,
-        },
-      ],
+      messages,
       temperature: 0.9,
-      max_tokens: 500,
+      max_tokens: 600,
       top_p: 0.95,
     });
 
     const aiMessage = completion.choices[0]?.message?.content || 
       "Sorry dear, I couldn't process that. Please try again. 💚";
 
-    return NextResponse.json({ message: aiMessage });
+    // Save both messages to history
+    try {
+      await saveChatMessage(userId, 'user', message, sessionId, { ventingMode, userProfile: userDoc?.profile });
+      await saveChatMessage(userId, 'assistant', aiMessage, sessionId);
+    } catch (error) {
+      console.error('Error saving chat messages:', error);
+      // Continue even if saving fails
+    }
+
+    return NextResponse.json({ message: aiMessage, sessionId });
   } catch (error: unknown) {
     console.error('Error in chat API:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

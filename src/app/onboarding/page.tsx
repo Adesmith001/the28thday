@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { saveCycleEntry } from '@/lib/firestore';
+import { CyclePhase } from '@/types/cycle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -112,6 +114,18 @@ export default function OnboardingPage() {
         },
         { merge: true }
       );
+
+      try {
+        await saveCycleEntry(user.id, {
+          startDate: data.lastPeriodStartDate,
+          cycleLength: data.averageCycleLength,
+          periodLength: data.periodLength || 5,
+          phase: CyclePhase.MENSTRUAL,
+        });
+      } catch (cycleError) {
+        console.error('Error creating initial cycle entry:', cycleError);
+        // Continue without blocking onboarding completion
+      }
 
       router.push('/dashboard');
     } catch (error) {

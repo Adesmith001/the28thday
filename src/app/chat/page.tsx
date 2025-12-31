@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Send, Loader2, Sparkles, Heart, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getChatHistory, createChatSession } from '@/lib/firestore';
 
 interface Message {
   role: 'user' | 'ai';
@@ -15,6 +16,8 @@ interface Message {
 export default function ChatPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
@@ -35,6 +38,38 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load chat history and ensure a session for continuity
+  useEffect(() => {
+    const init = async () => {
+      if (!user) return;
+      try {
+        // Load recent history (most recent 50 messages)
+        const history = await getChatHistory(user.id, 50);
+        if (history.length > 0) {
+          setMessages(
+            history.map((m) => ({
+              role: m.role === 'assistant' ? 'ai' : 'user',
+              content: m.content,
+              timestamp: m.timestamp || new Date(),
+            }))
+          );
+        }
+
+        // Ensure a session exists for better threading
+        if (!sessionId) {
+          const id = await createChatSession(user.id);
+          setSessionId(id);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    init();
+  }, [user, sessionId]);
 
   const sendMessage = async () => {
     if (!input.trim() || !user) return;
@@ -57,6 +92,7 @@ export default function ChatPage() {
           message: userMessage.content,
           userId: user.id,
           ventingMode,
+          sessionId,
         }),
       });
 
@@ -164,6 +200,9 @@ export default function ChatPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 pb-32">
         <div className="max-w-4xl mx-auto space-y-4">
+          {loadingHistory && (
+            <div className="flex justify-center text-gray-600 text-sm">Loading your past chats...</div>
+          )}
           {messages.map((message, index) => (
             <div
               key={index}
